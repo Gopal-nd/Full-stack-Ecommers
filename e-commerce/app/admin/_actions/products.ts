@@ -49,7 +49,7 @@
 import prisma from '@/db/db';
 import { z } from 'zod';
 import fs from 'fs/promises';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid'; // Use uuid package for generating UUID
 
 const fileSchema = z.instanceof(File, { message: "Required" });
@@ -64,7 +64,7 @@ const addSchema = z.object({
   image: imageSchema.refine((file) => file.size > 0, { message: "Required" }),
 });
 
-const AddProducts = async (formData: FormData) => {
+const AddProducts = async (prevState:unknown, formData: FormData) => {
   const result = addSchema.safeParse(Object.fromEntries(formData.entries()));
   if (!result.success) {
     return result.error.formErrors.fieldErrors;
@@ -86,6 +86,7 @@ const AddProducts = async (formData: FormData) => {
 
   await prisma.product.create({
     data: {
+      isAvailableForPurchase:false,
       name: data.name,
       description: data.description,
       priceInCents: data.priceInCents,
@@ -98,3 +99,29 @@ const AddProducts = async (formData: FormData) => {
 };
 
 export default AddProducts;
+
+export async function toggleProductAvailibility(id:string,isAvailableForPurchase:boolean){
+  if (!id || isAvailableForPurchase === undefined) {
+    throw new Error('Invalid arguments: id and isAvailableForPurchase are required');
+  }
+  await prisma.product.update({
+    where:{
+      id
+    },
+    data:{
+      isAvailableForPurchase
+    }
+  })
+}
+
+export async function DeleteProduct(id:string){
+ const product =  await prisma.product.delete({
+    where:{
+      id
+    }
+  })
+  if(product==null) return notFound()
+
+    await fs.unlink(product.filePath)
+    await fs.unlink(`public${product.imagePath}`)
+}
